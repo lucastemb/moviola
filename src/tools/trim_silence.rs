@@ -3,7 +3,7 @@ use std::process::Command;
 
 use crate::Result;
 use crate::env;
-use crate::media::video;
+use crate::media::{self, MediaKind, audio, video};
 
 const DEFAULT_SILENCE_THRESHOLD_DB: f32 = -20.0;
 const DEFAULT_MIN_SILENCE_MS: f32 = 250.0;
@@ -14,6 +14,7 @@ pub struct SilenceTrimConfig {
     pub output_path: PathBuf,
     pub threshold_db: f32,
     pub min_silence_duration_seconds: f32,
+    pub media_kind: MediaKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,10 +31,11 @@ struct KeepRange {
 
 pub fn run() -> Result<()> {
     let input_path = env::required_path("INPUT").map_err(|_| usage())?;
-    video::validate_video_path(&input_path)?;
+    let media_kind = MediaKind::from_path(&input_path).ok_or_else(unsupported_input_extension)?;
+    media::validate_path(&input_path, media_kind)?;
 
-    let output_path =
-        env::optional_path("OUTPUT").unwrap_or_else(|| default_output_path(&input_path));
+    let output_path = env::optional_path("OUTPUT")
+        .unwrap_or_else(|| default_output_path(&input_path, media_kind));
     let threshold_db =
         env::optional_f32("SILENCE_THRESHOLD")?.unwrap_or(DEFAULT_SILENCE_THRESHOLD_DB);
     let min_silence_ms = env::optional_f32("MIN_SILENCE_MS")?
@@ -45,11 +47,13 @@ pub fn run() -> Result<()> {
         output_path,
         threshold_db,
         min_silence_duration_seconds: min_silence_ms / 1000.0,
+        media_kind,
     };
 
     eprintln!("Moviola: trimming silence");
     eprintln!("  input: {}", config.input_path.display());
     eprintln!("  output: {}", config.output_path.display());
+    eprintln!("  media type: {}", config.media_kind.label());
     eprintln!("  silence threshold: {} dB", config.threshold_db);
     eprintln!("  minimum silence: {} ms", min_silence_ms);
 
@@ -59,12 +63,12 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
-fn default_output_path(input_path: &Path) -> PathBuf {
-    video::default_mp4_output_path(input_path, "silence_trimmed")
+fn default_output_path(input_path: &Path, media_kind: MediaKind) -> PathBuf {
+    media::default_output_path(input_path, "silence_trimmed", media_kind)
 }
 
 fn trim_silence(config: &SilenceTrimConfig) -> Result<()> {
-    video::validate_video_path(&config.input_path)?;
+    media::validate_path(&config.input_path, config.media_kind)?;
 
     if config.threshold_db >= 0.0 {
         return Err("Silence threshold must be below 0 dB, for example -30".into());
@@ -74,10 +78,10 @@ fn trim_silence(config: &SilenceTrimConfig) -> Result<()> {
         return Err("Minimum silence duration must be greater than 0 seconds".into());
     }
 
-    video::ensure_ffmpeg_tools_available()?;
-    video::ensure_output_parent_exists(&config.output_path)?;
+    media::ensure_ffmpeg_tools_available()?;
+    media::ensure_output_parent_exists(&config.output_path)?;
 
-    let duration = video::duration_seconds(&config.input_path)?;
+    let duration = media::duration_seconds(&config.input_path)?;
     let silences = detect_silences(config)?;
     let keep_ranges = build_keep_ranges(duration, &silences);
 
@@ -91,7 +95,7 @@ fn trim_silence(config: &SilenceTrimConfig) -> Result<()> {
         && keep_ranges[0].start <= 0.001
         && keep_ranges[0].end >= duration - 0.001
     {
-        video::transcode_for_delivery(&config.input_path, &config.output_path)?;
+        media::transcode_for_delivery(&config.input_path, &config.output_path, config.media_kind)?;
         return Ok(());
     }
 
@@ -99,7 +103,14 @@ fn trim_silence(config: &SilenceTrimConfig) -> Result<()> {
         .iter()
         .map(|range| (range.start, range.end))
         .collect::<Vec<_>>();
-    video::render_time_ranges(&config.input_path, &config.output_path, &ranges)
+    match config.media_kind {
+        MediaKind::Video => {
+            video::render_time_ranges(&config.input_path, &config.output_path, &ranges)
+        }
+        MediaKind::Audio => {
+            audio::render_time_ranges(&config.input_path, &config.output_path, &ranges)
+        }
+    }
 }
 
 fn detect_silences(config: &SilenceTrimConfig) -> Result<Vec<SilenceRange>> {
@@ -185,7 +196,16 @@ fn build_keep_ranges(duration: f64, silences: &[SilenceRange]) -> Vec<KeepRange>
 }
 
 fn usage() -> Box<dyn std::error::Error> {
-    "Missing required INPUT. Usage: make trim-silence INPUT=/path/to/video.mp4 [OUTPUT=/path/out.mp4] [SILENCE_THRESHOLD=-20] [MIN_SILENCE_MS=250]".into()
+    "Missing required INPUT. Usage: make trim-silence INPUT=/path/to/media.mp4 [OUTPUT=/path/out.mp4] [SILENCE_THRESHOLD=-20] [MIN_SILENCE_MS=250]".into()
+}
+
+fn unsupported_input_extension() -> Box<dyn std::error::Error> {
+    format!(
+        "Unsupported input extension. Supported video extensions: {}. Supported audio extensions: {}",
+        MediaKind::Video.supported_extensions().join(", "),
+        MediaKind::Audio.supported_extensions().join(", ")
+    )
+    .into()
 }
 
 #[cfg(test)]
