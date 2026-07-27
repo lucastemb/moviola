@@ -40,14 +40,14 @@ pub fn render_time_ranges(
 
     encoding::add_delivery_encoding_args(&mut command, output_path, MediaKind::Video);
 
-    let status = command
-        .arg(output_path)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()?;
+    let output = command.arg(output_path).stdout(Stdio::null()).output()?;
 
-    if !status.success() {
-        return Err("ffmpeg failed while rendering the clip".into());
+    if !output.status.success() {
+        return Err(format!(
+            "ffmpeg failed while rendering the clip: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
 
     Ok(())

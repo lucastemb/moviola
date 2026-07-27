@@ -1,9 +1,11 @@
+pub mod chop_video;
 pub mod trim_silence;
 
 use crate::Result;
 use crate::env;
 
 pub enum Tool {
+    ChopVideo,
     TrimSilence,
 }
 
@@ -17,6 +19,7 @@ impl Tool {
 
     pub fn from_name(name: &str) -> Result<Self> {
         match name {
+            "chop-video" => Ok(Self::ChopVideo),
             "trim-silence" => Ok(Self::TrimSilence),
             unknown => Err(format!(
                 "Unknown tool '{unknown}'. Available tools: {}",
@@ -27,11 +30,12 @@ impl Tool {
     }
 
     pub fn available_tools() -> &'static [&'static str] {
-        &["trim-silence"]
+        &["chop-video", "trim-silence"]
     }
 
     pub fn run(self) -> Result<()> {
         match self {
+            Self::ChopVideo => chop_video::run(),
             Self::TrimSilence => trim_silence::run(),
         }
     }
