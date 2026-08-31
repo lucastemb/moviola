@@ -57,6 +57,10 @@ fn default_cut_frequency_seconds(max_duration_seconds: f64) -> f64 {
     max_duration_seconds / DEFAULT_SEGMENT_COUNT
 }
 
+pub fn run_with_config(config: &ChopVideoConfig) -> Result<()> {
+    chop_video(config)
+}
+
 fn chop_video(config: &ChopVideoConfig) -> Result<()> {
     validate_config(config)?;
     media::ensure_ffmpeg_tools_available()?;

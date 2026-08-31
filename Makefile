@@ -73,3 +73,6 @@ clippy:
 
 clean:
 	cargo clean
+
+run-moviola:
+	cargo run --bin gui

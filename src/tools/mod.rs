@@ -1,5 +1,6 @@
 pub mod chop_video;
 pub mod trim_silence;
+pub mod video_sequencer;
 
 use crate::Result;
 use crate::env;
@@ -7,6 +8,7 @@ use crate::env;
 pub enum Tool {
     ChopVideo,
     TrimSilence,
+    VideoSequencer,
 }
 
 impl Tool {
@@ -21,6 +23,7 @@ impl Tool {
         match name {
             "chop-video" => Ok(Self::ChopVideo),
             "trim-silence" => Ok(Self::TrimSilence),
+            "video-sequencer" => Ok(Self::VideoSequencer),
             unknown => Err(format!(
                 "Unknown tool '{unknown}'. Available tools: {}",
                 Self::available_tools().join(", ")
@@ -30,13 +33,14 @@ impl Tool {
     }
 
     pub fn available_tools() -> &'static [&'static str] {
-        &["chop-video", "trim-silence"]
+        &["chop-video", "trim-silence", "video-sequencer"]
     }
 
     pub fn run(self) -> Result<()> {
         match self {
             Self::ChopVideo => chop_video::run(),
             Self::TrimSilence => trim_silence::run(),
+            Self::VideoSequencer => video_sequencer::run(),
         }
     }
 }
