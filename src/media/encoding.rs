@@ -53,11 +53,13 @@ pub fn add_delivery_encoding_args(
 
 fn add_video_delivery_encoding_args(command: &mut Command, output_path: &Path) {
     if is_quicktime_compatible_container(output_path) {
-        let encoder = env::var("VIDEO_ENCODER").unwrap_or_else(|_| default_video_encoder().into());
+        let encoder =
+            optional_env("VIDEO_ENCODER").unwrap_or_else(|| default_video_encoder().into());
 
         match encoder.as_str() {
             "h264_videotoolbox" => {
-                let video_bitrate = env::var("VIDEO_BITRATE").unwrap_or_else(|_| "6000k".into());
+                let video_bitrate =
+                    optional_env("VIDEO_BITRATE").unwrap_or_else(|| "30000k".into());
                 command.args([
                     "-c:v",
                     "h264_videotoolbox",
@@ -70,19 +72,17 @@ fn add_video_delivery_encoding_args(command: &mut Command, output_path: &Path) {
                 ]);
             }
             _ => {
+                let video_crf = optional_env("VIDEO_CRF").unwrap_or_else(|| "16".into());
+                let video_preset = optional_env("VIDEO_PRESET").unwrap_or_else(|| "slow".into());
                 command.args([
                     "-c:v",
                     "libx264",
                     "-preset",
-                    "veryfast",
+                    &video_preset,
                     "-crf",
-                    "23",
+                    &video_crf,
                     "-pix_fmt",
                     "yuv420p",
-                    "-profile:v",
-                    "high",
-                    "-level",
-                    "4.1",
                 ]);
             }
         }
@@ -91,7 +91,7 @@ fn add_video_delivery_encoding_args(command: &mut Command, output_path: &Path) {
             "-c:a",
             "aac",
             "-b:a",
-            "192k",
+            "320k",
             "-ar",
             "48000",
             "-movflags",
@@ -105,7 +105,7 @@ fn add_video_delivery_encoding_args(command: &mut Command, output_path: &Path) {
 fn add_audio_delivery_encoding_args(command: &mut Command, output_path: &Path) {
     match output_path.extension().and_then(OsStr::to_str) {
         Some(extension) if extension.eq_ignore_ascii_case("mp3") => {
-            command.args(["-c:a", "libmp3lame", "-b:a", "192k"]);
+            command.args(["-c:a", "libmp3lame", "-b:a", "320k"]);
         }
         Some(extension) if extension.eq_ignore_ascii_case("wav") => {
             command.args(["-c:a", "pcm_s16le"]);
@@ -114,17 +114,17 @@ fn add_audio_delivery_encoding_args(command: &mut Command, output_path: &Path) {
             command.args(["-c:a", "flac"]);
         }
         _ => {
-            command.args(["-c:a", "aac", "-b:a", "192k", "-ar", "48000"]);
+            command.args(["-c:a", "aac", "-b:a", "320k", "-ar", "48000"]);
         }
     }
 }
 
 fn default_video_encoder() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "h264_videotoolbox"
-    } else {
-        "libx264"
-    }
+    "libx264"
+}
+
+fn optional_env(name: &str) -> Option<String> {
+    env::var(name).ok().filter(|value| !value.trim().is_empty())
 }
 
 fn is_quicktime_compatible_container(output_path: &Path) -> bool {

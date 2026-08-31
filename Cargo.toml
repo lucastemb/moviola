@@ -6,3 +6,5 @@ license = "AGPL-3.0-or-later"
 readme = "README.md"
 
 [dependencies]
+eframe = "0.29"
+rfd = "0.15"

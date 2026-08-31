@@ -67,6 +67,10 @@ fn default_output_path(input_path: &Path, media_kind: MediaKind) -> PathBuf {
     media::default_output_path(input_path, "silence_trimmed", media_kind)
 }
 
+pub fn run_with_config(config: &SilenceTrimConfig) -> Result<()> {
+    trim_silence(config)
+}
+
 fn trim_silence(config: &SilenceTrimConfig) -> Result<()> {
     media::validate_path(&config.input_path, config.media_kind)?;
 
